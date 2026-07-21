@@ -48,7 +48,7 @@ Fields:
 Invoice:
 
 {raw_text}
-"""
+""",
     )
 
     return json.loads(response.output_text)
@@ -112,7 +112,7 @@ VAT:
 
 Summary:
 {invoice.ai_summary}
-"""
+""",
     )
 
     return json.loads(response.output_text)

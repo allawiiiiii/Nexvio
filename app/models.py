@@ -1,50 +1,123 @@
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import (
+    Integer,
+    String,
+    Float,
+    Text,
+    ForeignKey,
+    Boolean,
+    DateTime,
+)
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .database import Base
+from datetime import datetime
+
 
 class InvoiceDB(Base):
     __tablename__ = "invoices"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
 
     # File information
-    filename = Column(String, nullable=True)
+    filename: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
 
-    # Workflow
-    status = Column(String, default="uploaded")
+    status: Mapped[str] = mapped_column(
+        String,
+        default="uploaded",
+    )
 
-    # AI extraction
-    supplier = Column(String)
-    invoice_number = Column(String, nullable=True)
-    invoice_date = Column(String, nullable=True)
+    supplier: Mapped[str] = mapped_column(
+        String,
+    )
 
-    total_amount = Column(Float)
-    vat_amount = Column(Float)
+    category: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
 
-    category = Column(String, nullable=True)
-    confidence = Column(Float, default=0.0)
+    confidence: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+    )
 
-    raw_text = Column(Text, nullable=True)
-    ai_summary = Column(Text, nullable=True)
+    raw_text: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    ai_summary: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    paid: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+    )
+
+    paid_date: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    invoice_number: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    invoice_date: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+    )
+
+    total_amount: Mapped[float] = mapped_column(
+        Float,
+    )
+
+    vat_amount: Mapped[float] = mapped_column(
+        Float,
+    )
+
+    journal_entries: Mapped[list["JournalEntryDB"]] = relationship(
+        back_populates="invoice",
+    )
+
+    transactions: Mapped[list["TransactionDB"]] = relationship(
+        back_populates="invoice",
+    )
 
 
 class JournalEntryDB(Base):
     __tablename__ = "journal_entries"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
-    invoice_id = Column(
-        Integer,
+    invoice_id: Mapped[int] = mapped_column(
         ForeignKey("invoices.id"),
         nullable=False,
     )
 
-    status = Column(String, default="draft")
+    status: Mapped[str] = mapped_column(
+        String,
+        default="draft",
+    )
 
-    invoice = relationship("InvoiceDB")
+    invoice: Mapped["InvoiceDB"] = relationship(
+        back_populates="journal_entries",
+    )
 
-    lines = relationship(
-        "JournalLineDB",
+    lines: Mapped[list["JournalLineDB"]] = relationship(
         back_populates="entry",
         cascade="all, delete-orphan",
     )
@@ -53,23 +126,130 @@ class JournalEntryDB(Base):
 class JournalLineDB(Base):
     __tablename__ = "journal_lines"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    journal_entry_id = Column(
+    id: Mapped[int] = mapped_column(
         Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    journal_entry_id: Mapped[int] = mapped_column(
         ForeignKey("journal_entries.id"),
         nullable=False,
     )
 
-    account = Column(String, nullable=False)
+    account: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
 
-    description = Column(String)
+    description: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
 
-    debit = Column(Float, default=0)
+    debit: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
 
-    credit = Column(Float, default=0)
+    credit: Mapped[float] = mapped_column(
+        Float,
+        default=0,
+    )
 
-    entry = relationship(
-        "JournalEntryDB",
+    entry: Mapped["JournalEntryDB"] = relationship(
         back_populates="lines",
+    )
+
+
+class StatementDB(Base):
+    __tablename__ = "statements"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    filename: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    bank_name: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    period_start: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    period_end: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True,
+    )
+
+    transactions: Mapped[list["TransactionDB"]] = relationship(
+        back_populates="statement",
+        cascade="all, delete-orphan",
+    )
+
+
+class TransactionDB(Base):
+    __tablename__ = "transactions"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    statement_id: Mapped[int] = mapped_column(
+        ForeignKey("statements.id"),
+        nullable=False,
+    )
+
+    date: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    description: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+    )
+
+    amount: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+    )
+
+    balance: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String,
+        default="SEK",
+    )
+
+    status: Mapped[str] = mapped_column(
+        String,
+        default="unmatched",
+    )
+
+    matched_invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoices.id"),
+        nullable=True,
+    )
+
+    statement: Mapped["StatementDB"] = relationship(
+        back_populates="transactions",
+    )
+
+    invoice: Mapped["InvoiceDB"] = relationship(
+        back_populates="transactions",
     )

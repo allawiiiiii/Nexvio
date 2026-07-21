@@ -61,3 +61,45 @@ class JournalEntryResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TransactionResponse(BaseModel):
+    id: int
+
+    date: str
+    description: str
+
+    amount: float
+    balance: float | None
+
+    currency: str
+
+    status: str
+
+    matched_invoice_id: int | None
+
+    class Config:
+        from_attributes = True
+
+
+class StatementResponse(BaseModel):
+    id: int
+
+    filename: str
+
+    bank_name: str | None
+
+    period_start: str | None
+
+    period_end: str | None
+
+    transactions: list[TransactionResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class StatementUploadResponse(BaseModel):
+    id: int
+    filename: str
+    message: str

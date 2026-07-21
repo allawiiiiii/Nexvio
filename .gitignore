@@ -1,25 +1,37 @@
 # Environment
 .env
+.env.*
+!.env.example
+
 .venv/
 venv/
 
 # Python cache
 __pycache__/
 *.py[cod]
-*.pyc
+.pyc
 *.pyo
 *.pyd
-
+.pytest_cache/
 
 # SQLite database
 *.db
 
-# VS Code
-.vscode/
+# Uploaded files
+uploads/
+
+# Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# Uploaded files
-uploads/
+# IDE
+.vscode/
+.idea/

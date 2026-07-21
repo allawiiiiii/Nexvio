@@ -8,11 +8,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from app.database import SessionLocal, engine, Base
 
-from app.models import (
-    InvoiceDB,
-    JournalEntryDB,
-    JournalLineDB,
-)
+from app.models import InvoiceDB, JournalEntryDB, JournalLineDB, StatementDB
 
 import json
 import os
@@ -33,10 +29,15 @@ from app.schemas import (
     InvoiceDetailResponse,
     InvoiceUpdate,
     JournalEntryResponse,
+    StatementUploadResponse,
 )
 
 UPLOAD_FOLDER = Path("uploads")
-UPLOAD_FOLDER.mkdir(exist_ok=True)
+INVOICE_UPLOAD_FOLDER = UPLOAD_FOLDER / "invoices"
+STATEMENT_UPLOAD_FOLDER = UPLOAD_FOLDER / "statements"
+
+INVOICE_UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+STATEMENT_UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # --------- LOAD ENV ---------
 load_dotenv()
@@ -69,6 +70,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # --------- REQUEST MODEL ---------
 class ParseRequest(BaseModel):
     text: str
@@ -89,13 +91,10 @@ async def ai_parse(request: ParseRequest, db: Session = Depends(get_db)):
                 total_amount and vat_amount from the text.
 
                 Return ONLY valid JSON.
-                """
+                """,
             },
-            {
-                "role": "user",
-                "content": request.text
-            }
-        ]
+            {"role": "user", "content": request.text},
+        ],
     )
 
     content = response.choices[0].message.content
@@ -106,10 +105,7 @@ async def ai_parse(request: ParseRequest, db: Session = Depends(get_db)):
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=500,
-            detail="AI did not return valid JSON"
-        )
+        raise HTTPException(status_code=500, detail="AI did not return valid JSON")
 
     invoice_db = InvoiceDB(
         supplier=parsed.get("supplier"),
@@ -135,15 +131,10 @@ async def read_invoices(db: Session = Depends(get_db)):
 # --------- GET SINGLE INVOICE ---------
 @app.get("/invoices/{invoice_id}", response_model=InvoiceDetailResponse)
 async def read_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    invoice = db.query(InvoiceDB).filter(
-        InvoiceDB.id == invoice_id
-    ).first()
+    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
 
     if invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found"
-        )
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     return invoice
 
@@ -155,15 +146,10 @@ async def update_invoice(
     invoice_update: InvoiceUpdate,
     db: Session = Depends(get_db),
 ):
-    invoice = db.query(InvoiceDB).filter(
-        InvoiceDB.id == invoice_id
-    ).first()
+    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
 
     if invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found"
-        )
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     update_data = invoice_update.model_dump(exclude_unset=True)
 
@@ -175,28 +161,22 @@ async def update_invoice(
 
     return invoice
 
+
 # --------- DELETE INVOICE ---------
 @app.delete("/invoices/{invoice_id}")
 async def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    invoice = db.query(InvoiceDB).filter(
-        InvoiceDB.id == invoice_id
-    ).first()
+    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
 
     if invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found"
-        )
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     db.delete(invoice)
     db.commit()
 
-    return {
-        "message": "Invoice deleted successfully"
-    }
+    return {"message": "Invoice deleted successfully"}
 
 
 # --------- APPROVE INVOICE ---------
@@ -205,15 +185,10 @@ async def approve_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    invoice = db.query(InvoiceDB).filter(
-        InvoiceDB.id == invoice_id
-    ).first()
+    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
 
     if invoice is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found"
-        )
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice.status = "approved"
 
@@ -231,11 +206,7 @@ async def create_journal(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    invoice = (
-        db.query(InvoiceDB)
-        .filter(InvoiceDB.id == invoice_id)
-        .first()
-    )
+    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
 
     if invoice is None:
         raise HTTPException(
@@ -250,10 +221,8 @@ async def create_journal(
         )
 
     existing = (
-    db.query(JournalEntryDB)
-    .filter(JournalEntryDB.invoice_id == invoice.id)
-    .first()
-)
+        db.query(JournalEntryDB).filter(JournalEntryDB.invoice_id == invoice.id).first()
+    )
 
     if existing:
         return existing
@@ -303,11 +272,14 @@ async def create_journal(
 
 # --------- FILE UPLOAD ---------
 @app.post("/upload")
-async def upload_invoice(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    filepath = UPLOAD_FOLDER / file.filename
+async def upload_invoice(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if file.filename is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Filnamn saknas.",
+        )
+
+    filepath = INVOICE_UPLOAD_FOLDER / file.filename
 
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -319,7 +291,6 @@ async def upload_invoice(
         filename=file.filename,
         status="review_required",
         raw_text=raw_text,
-
         supplier=invoice_data["supplier"],
         invoice_number=invoice_data["invoice_number"],
         invoice_date=invoice_data["invoice_date"],
@@ -338,3 +309,38 @@ async def upload_invoice(
         "filename": invoice.filename,
         "status": invoice.status,
     }
+
+
+@app.post(
+    "/statements/upload",
+    response_model=StatementUploadResponse,
+)
+async def upload_statement(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    if file.filename is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Filnamn saknas.",
+        )
+
+    filename = file.filename
+    filepath = STATEMENT_UPLOAD_FOLDER / filename
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    statement = StatementDB(
+        filename=filename,
+    )
+
+    db.add(statement)
+    db.commit()
+    db.refresh(statement)
+
+    return StatementUploadResponse(
+        id=int(statement.id),
+        filename=filename,
+        message="Kontoutdrag uppladdat.",
+    )
