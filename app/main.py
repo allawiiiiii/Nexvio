@@ -6,9 +6,16 @@ from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import SessionLocal, engine, Base
 
-from app.models import InvoiceDB, JournalEntryDB, JournalLineDB, StatementDB
+from app.models import (
+    InvoiceDB,
+    JournalEntryDB,
+    JournalLineDB,
+    StatementDB,
+    TransactionDB,
+)
 
 import json
 import os
@@ -30,6 +37,13 @@ from app.schemas import (
     InvoiceUpdate,
     JournalEntryResponse,
     StatementUploadResponse,
+    DashboardResponse,
+)
+
+from app.services.statement_parser import (
+    extract_text,
+    parse_transactions,
+    save_transactions,
 )
 
 UPLOAD_FOLDER = Path("uploads")
@@ -339,8 +353,67 @@ async def upload_statement(
     db.commit()
     db.refresh(statement)
 
+    text = extract_text(str(filepath))
+
+    transactions = parse_transactions(text)
+
+    save_transactions(
+        db=db,
+        statement_id=statement.id,
+        transactions=transactions,
+    )
+
     return StatementUploadResponse(
         id=int(statement.id),
         filename=filename,
         message="Kontoutdrag uppladdat.",
+    )
+
+
+@app.get("/transactions")
+def read_transactions(db: Session = Depends(get_db)):
+    return db.query(TransactionDB).all()
+
+
+from app.services.matching import match_transactions
+
+
+@app.post("/match")
+def run_matching(db: Session = Depends(get_db)):
+    matches = match_transactions(db)
+
+    return {"matches": matches}
+
+
+@app.get("/dashboard", response_model=DashboardResponse)
+def get_dashboard(db: Session = Depends(get_db)):
+    invoices_total = db.query(func.count(InvoiceDB.id)).scalar() or 0
+
+    invoices_paid = (
+        db.query(func.count(InvoiceDB.id)).filter(InvoiceDB.paid == True).scalar() or 0
+    )
+
+    invoices_unpaid = invoices_total - invoices_paid
+
+    transactions_total = db.query(func.count(TransactionDB.id)).scalar() or 0
+
+    transactions_matched = (
+        db.query(func.count(TransactionDB.id))
+        .filter(TransactionDB.status == "matched")
+        .scalar()
+        or 0
+    )
+
+    transactions_unmatched = transactions_total - transactions_matched
+
+    journal_entries_total = db.query(func.count(JournalEntryDB.id)).scalar() or 0
+
+    return DashboardResponse(
+        invoices_total=invoices_total,
+        invoices_paid=invoices_paid,
+        invoices_unpaid=invoices_unpaid,
+        transactions_total=transactions_total,
+        transactions_matched=transactions_matched,
+        transactions_unmatched=transactions_unmatched,
+        journal_entries_total=journal_entries_total,
     )

@@ -1,53 +1,58 @@
-import {
-  FileText,
-  Clock3,
-  CheckCircle2,
-  Wallet,
-} from "lucide-react";
+import { FileText, Clock3, CheckCircle2, Wallet } from "lucide-react";
 
 type Invoice = {
   status: string;
 };
 
+type Dashboard = {
+  invoices_total: number;
+  invoices_paid: number;
+  invoices_unpaid: number;
+
+  transactions_total: number;
+  transactions_matched: number;
+  transactions_unmatched: number;
+
+  journal_entries_total: number;
+};
+
 export default function StatsCards({
   invoices,
+  dashboard,
 }: {
   invoices: Invoice[];
+  dashboard: Dashboard | null;
 }) {
-  const totalt = invoices.length;
+  const totalt = dashboard?.invoices_total ?? invoices.length;
 
-  const granskning = invoices.filter(
-    (invoice) => invoice.status === "review_required"
-  ).length;
+  const granskning =
+    dashboard?.transactions_unmatched ??
+    invoices.filter((invoice) => invoice.status === "review_required").length;
 
-  const godkända = invoices.filter(
-    (invoice) => invoice.status === "approved"
-  ).length;
+  const godkända =
+    dashboard?.invoices_paid ??
+    invoices.filter((invoice) => invoice.status === "approved").length;
 
   return (
     <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-4">
-      <StatCard
-        ikon={<FileText size={20} />}
-        titel="Totalt antal fakturor"
-        värde={totalt}
-      />
+      <StatCard ikon={<FileText size={20} />} titel="Fakturor" värde={totalt} />
 
       <StatCard
-        ikon={<Clock3 size={20} />}
-        titel="Behöver granskas"
-        värde={granskning}
+        ikon={<Wallet size={20} />}
+        titel="Transaktioner"
+        värde={dashboard?.transactions_total ?? 0}
       />
 
       <StatCard
         ikon={<CheckCircle2 size={20} />}
-        titel="Godkända"
-        värde={godkända}
+        titel="Matchade"
+        värde={dashboard?.transactions_matched ?? 0}
       />
 
       <StatCard
-        ikon={<Wallet size={20} />}
-        titel="AI-status"
-        värde="Redo"
+        ikon={<Clock3 size={20} />}
+        titel="Omatchade"
+        värde={dashboard?.transactions_unmatched ?? 0}
       />
     </div>
   );
@@ -68,13 +73,9 @@ function StatCard({
         {ikon}
       </div>
 
-      <p className="text-sm text-[#6B665F]">
-        {titel}
-      </p>
+      <p className="text-sm text-[#6B665F]">{titel}</p>
 
-      <h2 className="mt-2 text-4xl font-semibold text-[#201C18]">
-        {värde}
-      </h2>
+      <h2 className="mt-2 text-4xl font-semibold text-[#201C18]">{värde}</h2>
     </div>
   );
 }

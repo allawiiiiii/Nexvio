@@ -103,3 +103,15 @@ class StatementUploadResponse(BaseModel):
     id: int
     filename: str
     message: str
+
+
+class DashboardResponse(BaseModel):
+    invoices_total: int
+    invoices_paid: int
+    invoices_unpaid: int
+
+    transactions_total: int
+    transactions_matched: int
+    transactions_unmatched: int
+
+    journal_entries_total: int
