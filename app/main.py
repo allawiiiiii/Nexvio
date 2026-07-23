@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import SessionLocal, engine, Base
-
+import hashlib
 from app.models import (
     InvoiceDB,
     JournalEntryDB,
@@ -16,21 +16,16 @@ from app.models import (
     StatementDB,
     TransactionDB,
 )
-
 import json
 import os
 from pathlib import Path
 import shutil
-
 from app.services.ocr import extract_text_from_pdf
-
 from app.services.ai import (
     extract_invoice_data,
     suggest_journal_entry,
 )
-
 from typing import List
-
 from app.schemas import (
     InvoiceResponse,
     InvoiceDetailResponse,
@@ -39,7 +34,6 @@ from app.schemas import (
     StatementUploadResponse,
     DashboardResponse,
 )
-
 from app.services.statement_parser import (
     extract_text,
     parse_transactions,
@@ -339,14 +333,27 @@ async def upload_statement(
             detail="Filnamn saknas.",
         )
 
+    file_bytes = await file.read()
+
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+
+    existing = db.query(StatementDB).filter(StatementDB.file_hash == file_hash).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="Det här kontoutdraget har redan importerats.",
+        )
+
     filename = file.filename
     filepath = STATEMENT_UPLOAD_FOLDER / filename
 
     with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_bytes)
 
     statement = StatementDB(
         filename=filename,
+        file_hash=file_hash,
     )
 
     db.add(statement)

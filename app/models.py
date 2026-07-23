@@ -176,6 +176,12 @@ class StatementDB(Base):
         nullable=False,
     )
 
+    file_hash: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        nullable=False,
+    )
+
     bank_name: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
