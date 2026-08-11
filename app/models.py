@@ -25,6 +25,11 @@ class InvoiceDB(Base):
         index=True,
     )
 
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
     # File information
     filename: Mapped[str | None] = mapped_column(
         String,
@@ -101,6 +106,10 @@ class InvoiceDB(Base):
         back_populates="invoice",
     )
 
+    user: Mapped["UserDB"] = relationship(
+        back_populates="invoices",
+    )
+
 
 class JournalEntryDB(Base):
     __tablename__ = "journal_entries"
@@ -174,6 +183,10 @@ class StatementDB(Base):
         primary_key=True,
         index=True,
     )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=False,
+    )
 
     filename: Mapped[str] = mapped_column(
         String,
@@ -204,6 +217,10 @@ class StatementDB(Base):
     transactions: Mapped[list["TransactionDB"]] = relationship(
         back_populates="statement",
         cascade="all, delete-orphan",
+    )
+
+    user: Mapped["UserDB"] = relationship(
+        back_populates="statements",
     )
 
 
@@ -290,4 +307,12 @@ class UserDB(Base):
         DateTime,
         default=datetime.utcnow,
         nullable=False,
+    )
+
+    invoices: Mapped[list["InvoiceDB"]] = relationship(
+        back_populates="user",
+    )
+
+    statements: Mapped[list["StatementDB"]] = relationship(
+        back_populates="user",
     )

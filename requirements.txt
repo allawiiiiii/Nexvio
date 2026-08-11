@@ -11,3 +11,4 @@ psycopg[binary]
 email-validator
 pdfplumber
 pwdlib[argon2]
+python-jose[cryptography]
