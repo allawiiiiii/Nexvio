@@ -1,70 +1,48 @@
-from fastapi import APIRouter
-
-router = APIRouter(
-    prefix="/invoices",
-    tags=["Invoices"],
-)
-
 from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-
 from app.database import get_db
-from app.models import InvoiceDB
-from app.schemas import InvoiceResponse, InvoiceDetailResponse
-
-router = APIRouter(
-    prefix="/invoices",
-    tags=["Invoices"],
-)
-
-import shutil
-
-from fastapi import UploadFile, File
-from app.services.ocr import extract_text_from_pdf
-from app.services.ai import extract_invoice_data
-from app.models import InvoiceDB
-from app.database import get_db
+from app.core.security import get_current_user
 from app.config import INVOICE_UPLOAD_FOLDER
-from typing import List
 import shutil
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy.orm import Session
-
-from app.config import INVOICE_UPLOAD_FOLDER
-from app.database import get_db
-
-from app.models import (
-    InvoiceDB,
-    JournalEntryDB,
-    JournalLineDB,
-)
-
+from app.models import InvoiceDB, JournalEntryDB, JournalLineDB, UserDB
 from app.schemas import (
     InvoiceResponse,
     InvoiceDetailResponse,
     InvoiceUpdate,
     JournalEntryResponse,
 )
-
 from app.services.ai import (
     extract_invoice_data,
     suggest_journal_entry,
 )
-
 from app.services.ocr import extract_text_from_pdf
+
+router = APIRouter(
+    prefix="/invoices",
+    tags=["Invoices"],
+)
 
 
 @router.get("/", response_model=List[InvoiceResponse])
-async def read_invoices(db: Session = Depends(get_db)):
-    return db.query(InvoiceDB).all()
+async def read_invoices(
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
+):
+    return db.query(InvoiceDB).filter(InvoiceDB.user_id == current_user.id).all()
 
 
 @router.get("/{invoice_id}", response_model=InvoiceDetailResponse)
-async def read_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
+async def read_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
+):
+    invoice = (
+        db.query(InvoiceDB)
+        .filter(InvoiceDB.id == invoice_id, InvoiceDB.user_id == current_user.id)
+        .first()
+    )
 
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -76,6 +54,7 @@ async def read_invoice(invoice_id: int, db: Session = Depends(get_db)):
 async def upload_invoice(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
     if file.filename is None:
         raise HTTPException(
@@ -92,6 +71,7 @@ async def upload_invoice(
     invoice_data = extract_invoice_data(raw_text)
 
     invoice = InvoiceDB(
+        user_id=current_user.id,
         filename=file.filename,
         status="review_required",
         raw_text=raw_text,
@@ -116,13 +96,21 @@ async def upload_invoice(
 
 
 # --------- UPDATE INVOICE ---------
-@router.patch("/invoices/{invoice_id}", response_model=InvoiceDetailResponse)
+@router.patch("/{invoice_id}", response_model=InvoiceDetailResponse)
 async def update_invoice(
     invoice_id: int,
     invoice_update: InvoiceUpdate,
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
-    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
+    invoice = (
+        db.query(InvoiceDB)
+        .filter(
+            InvoiceDB.id == invoice_id,
+            InvoiceDB.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -139,12 +127,20 @@ async def update_invoice(
 
 
 # --------- DELETE INVOICE ---------
-@router.delete("/invoices/{invoice_id}")
+@router.delete("/{invoice_id}")
 async def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
-    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
+    invoice = (
+        db.query(InvoiceDB)
+        .filter(
+            InvoiceDB.id == invoice_id,
+            InvoiceDB.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -156,12 +152,20 @@ async def delete_invoice(
 
 
 # --------- APPROVE INVOICE ---------
-@router.post("/invoices/{invoice_id}/approve", response_model=InvoiceDetailResponse)
+@router.post("/{invoice_id}/approve", response_model=InvoiceDetailResponse)
 async def approve_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
-    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
+    invoice = (
+        db.query(InvoiceDB)
+        .filter(
+            InvoiceDB.id == invoice_id,
+            InvoiceDB.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -175,14 +179,22 @@ async def approve_invoice(
 
 
 @router.post(
-    "/invoices/{invoice_id}/journal",
+    "/{invoice_id}/journal",
     response_model=JournalEntryResponse,
 )
 async def create_journal(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
-    invoice = db.query(InvoiceDB).filter(InvoiceDB.id == invoice_id).first()
+    invoice = (
+        db.query(InvoiceDB)
+        .filter(
+            InvoiceDB.id == invoice_id,
+            InvoiceDB.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if invoice is None:
         raise HTTPException(

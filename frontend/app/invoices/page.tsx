@@ -19,9 +19,34 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/invoices/")
-      .then((res) => res.json())
-      .then(setInvoices);
+    async function loadInvoices() {
+      const token = localStorage.getItem("access_token");
+
+      if (!token) {
+        return;
+      }
+
+      try {
+        const res = await fetch("http://127.0.0.1:8000/invoices/", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!res.ok) {
+          console.log("INVOICE STATUS:", res.status);
+          console.log("INVOICE RESPONSE:", await res.text());
+          throw new Error("Failed to fetch invoices");
+        }
+
+        const data = await res.json();
+        setInvoices(data);
+      } catch (error) {
+        console.error("Invoice fetch failed:", error);
+      }
+    }
+
+    loadInvoices();
   }, []);
 
   return (

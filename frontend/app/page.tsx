@@ -36,13 +36,50 @@ export default function Home() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/invoices/")
-      .then((res) => res.json())
-      .then((data) => setInvoices(data));
+    const token = localStorage.getItem("access_token");
 
-    fetch("http://127.0.0.1:8000/dashboard")
-      .then((res) => res.json())
-      .then((data) => setDashboard(data));
+    if (!token) {
+      return;
+    }
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    fetch("http://127.0.0.1:8000/invoices/", {
+      headers,
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch invoices");
+        }
+
+        return res.json();
+      })
+      .then((data) => {
+        console.log("INVOICES RESPONSE:", data);
+        setInvoices(data);
+      })
+      .catch((error) => {
+        console.error("Invoice fetch failed:", error);
+      });
+
+    fetch("http://127.0.0.1:8000/dashboard", {
+      headers,
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch dashboard");
+        }
+
+        return res.json();
+      })
+      .then((data) => {
+        setDashboard(data);
+      })
+      .catch((error) => {
+        console.error("Dashboard fetch failed:", error);
+      });
   }, []);
 
   console.log(JSON.stringify(dashboard, null, 2));

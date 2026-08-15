@@ -10,10 +10,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .database import Base
 from datetime import datetime
-from datetime import datetime
-
-from sqlalchemy import Boolean, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
 
 
 class InvoiceDB(Base):

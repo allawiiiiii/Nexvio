@@ -1,15 +1,12 @@
-from fastapi import APIRouter
 import hashlib
 from pathlib import Path
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
-
 from app.config import STATEMENT_UPLOAD_FOLDER
+from app.core.security import get_current_user
 from app.database import get_db
-from app.models import StatementDB
+from app.models import StatementDB, UserDB
 from app.schemas import StatementUploadResponse
-
 from app.services.statement_parser import (
     extract_text,
     parse_transactions,
@@ -29,6 +26,7 @@ router = APIRouter(
 async def upload_statement(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
     if file.filename is None:
         raise HTTPException(
@@ -40,7 +38,14 @@ async def upload_statement(
 
     file_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    existing = db.query(StatementDB).filter(StatementDB.file_hash == file_hash).first()
+    existing = (
+        db.query(StatementDB)
+        .filter(
+            StatementDB.file_hash == file_hash,
+            StatementDB.user_id == current_user.id,
+        )
+        .first()
+    )
 
     if existing:
         raise HTTPException(
@@ -55,6 +60,7 @@ async def upload_statement(
         buffer.write(file_bytes)
 
     statement = StatementDB(
+        user_id=current_user.id,
         filename=filename,
         file_hash=file_hash,
     )
